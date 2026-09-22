@@ -134,6 +134,8 @@ JSON Schema Output:
         if (parsed?.commentAnalysis) {
           enforceDisjointQuotes(parsed.commentAnalysis);
         }
+        parsed.analysisSource = 'gemini_ai';
+        parsed.modelUsed = mName;
         return parsed;
       } catch (e) {
         console.warn(`[Gemini API] Model ${mName} attempt failed: ${e.message}`);
@@ -141,10 +143,14 @@ JSON Schema Output:
     }
 
     console.warn('[Gemini API] Keys unauthorized or disabled. Running dynamic comment scanner...');
-    return generateDynamicCommentAnalysis(videoDetails, comments);
+    const dynamicResult = generateDynamicCommentAnalysis(videoDetails, comments);
+    dynamicResult.analysisSource = 'live_youtube_nlp';
+    return dynamicResult;
   } catch (error) {
     console.error('[Gemini API] Dynamic scanner fallback triggered:', error.message);
-    return generateDynamicCommentAnalysis(videoDetails, comments);
+    const dynamicResult = generateDynamicCommentAnalysis(videoDetails, comments);
+    dynamicResult.analysisSource = 'live_youtube_nlp';
+    return dynamicResult;
   }
 }
 
@@ -228,27 +234,55 @@ function generateDynamicCommentAnalysis(videoDetails, comments = []) {
   if (negCount === 0) negPct = 10;
   const neuPct = Math.max(5, 100 - posPct - negPct);
 
-  // Extract loved quotes (Max 2 distinct quotes)
-  const lovedQuotes = lovedComments.slice(0, 2).map(c => c.text);
-  const secondaryLovedQuotes = lovedComments.slice(2, 4).map(c => c.text);
+  // Extract loved quotes (Max 3 distinct quotes)
+  const lovedQuotes = lovedComments.slice(0, 3).map(c => c.text);
+  const secondaryLovedQuotes = lovedComments.slice(3, 6).map(c => c.text);
 
-  // Extract hated quotes (Max 2 distinct quotes that NEVER overlap with loved quotes)
-  const hatedQuotes = hatedComments.filter(c => !lovedQuotes.includes(c.text)).slice(0, 2).map(c => c.text);
+  // Extract hated quotes (Max 3 distinct quotes that NEVER overlap with loved quotes)
+  const hatedQuotes = hatedComments.filter(c => !lovedQuotes.includes(c.text)).slice(0, 3).map(c => c.text);
 
-  // Dynamic titles tailored to video
+  // Extract keywords from real video tags, description, and title
+  const videoTags = (videoDetails.tags || []).map(t => t.toLowerCase().trim()).filter(Boolean);
+  const cleanTitleWords = title.split(/\s+/).map(w => w.replace(/[^\w]/g, '')).filter(w => w.length > 3);
+  
+  const primaryTags = Array.from(new Set([
+    ...cleanTitleWords.slice(0, 3).map(w => w.toLowerCase()),
+    ...videoTags.slice(0, 3),
+    'youtube 2026'
+  ])).slice(0, 6);
+
+  const secondaryTags = Array.from(new Set([
+    ...videoTags.slice(3, 8),
+    ...cleanTitleWords.map(w => `${w.toLowerCase()} guide`),
+    'viral tips'
+  ])).slice(0, 6);
+
+  const longTailKeywords = [
+    `how to ${cleanTitleWords.join(' ').toLowerCase()}`,
+    `best practices for ${cleanTitleWords[0] || 'this topic'}`,
+    `step by step ${cleanTitleWords.slice(0, 2).join(' ').toLowerCase()} tutorial`
+  ];
+
+  const hashtags = Array.from(new Set([
+    ...cleanTitleWords.map(w => `#${w}`),
+    '#YouTubeGrowth',
+    '#CreatorStudio'
+  ])).slice(0, 5);
+
+  // Dynamic High-CTR Titles
   const suggestedTitles = [
     {
-      title: `Why Everyone is Talking About "${title.slice(0, 45)}"`,
-      strategy: `High-curiosity hook building authority around ${mainSubject}.`,
+      title: `Why Everyone is Talking About "${title.slice(0, 50)}"`,
+      strategy: `High-curiosity hook built around ${cleanTitleWords[0] || 'main subject'}.`,
       hookType: 'Curiosity'
     },
     {
-      title: `Stop Making This ${mainSubject} Mistake! (${title.slice(0, 35)})`,
-      strategy: `Contrarian fear-of-missing-out framing targeting active creators.`,
+      title: `Stop Making This ${cleanTitleWords[0] || 'Content'} Mistake! (${title.slice(0, 35)})`,
+      strategy: `Contrarian fear-of-missing-out framing targeting active viewers.`,
       hookType: 'Contrarian'
     },
     {
-      title: `The Ultimate ${mainSubject} Blueprint: ${secondarySubject} Masterclass`,
+      title: `The Ultimate ${cleanTitleWords.slice(0, 2).join(' ') || 'Strategy'} Blueprint`,
       strategy: `High-value step-by-step authority title to boost search clicks.`,
       hookType: 'High Value'
     },
@@ -258,7 +292,7 @@ function generateDynamicCommentAnalysis(videoDetails, comments = []) {
       hookType: 'Story & Proof'
     },
     {
-      title: `5 Secrets to Master ${mainSubject} in 2026`,
+      title: `5 Secrets to Master ${cleanTitleWords[0] || 'This Topic'} in 2026`,
       strategy: `Listicle format with current year urgency marker.`,
       hookType: 'Urgency'
     }
@@ -266,60 +300,73 @@ function generateDynamicCommentAnalysis(videoDetails, comments = []) {
 
   // Dynamic questions
   const finalQuestions = realQuestions.slice(0, 3);
-  if (finalQuestions.length === 0) {
-    finalQuestions.push(
-      `Can you share a part 2 with more details on ${mainSubject}?`,
-      `Which tools and setup did you use for ${secondarySubject}?`,
-      `Where can we get the templates or resources mentioned in the video?`
-    );
+
+  // Dynamic action plan based strictly on real comments
+  const creatorActionPlan = [
+    lovedComments.length > 0 
+      ? `Double down on audience-praised topics in top comments (e.g. "${lovedComments[0]?.text?.slice(0, 40)}...")`
+      : `Encourage viewers in your next intro to leave comments to boost algorithmic engagement.`,
+    hatedComments.length > 0 
+      ? `Address critical viewer feedback: "${hatedComments[0]?.text?.slice(0, 50)}..."`
+      : `Pin a comment asking viewers what specific topics they want covered next.`,
+    finalQuestions.length > 0
+      ? `Create a dedicated follow-up upload answering: "${finalQuestions[0]}"`
+      : `Create a follow-up video building on "${title.slice(0, 35)}"`
+  ];
+
+  const appreciatedElements = [];
+  if (lovedQuotes.length > 0) {
+    appreciatedElements.push({
+      topic: `Audience Praise & Positive Highlights`,
+      explanation: `Viewers expressed appreciation for authentic value and insights in the video.`,
+      sampleQuotes: lovedQuotes
+    });
+  }
+  if (secondaryLovedQuotes.length > 0) {
+    appreciatedElements.push({
+      topic: `Community Engagement & Respect`,
+      explanation: `Audience praised creator presentation and direct communication style.`,
+      sampleQuotes: secondaryLovedQuotes
+    });
   }
 
-  // Dynamic action plan based on feedback
-  const creatorActionPlan = [
-    `Double down on topics praised in top comments (e.g. ${mainSubject} practical breakdowns).`,
-    negCount > 0 
-      ? `Address viewer complaints regarding pacing/audio balance noted in critical feedback.` 
-      : `Pin a comment addressing the top viewer questions to boost community engagement.`,
-    `Create a dedicated follow-up upload answering "${finalQuestions[0] || 'the main viewer question'}"`
-  ];
+  const hatedOrCriticizedElements = [];
+  if (hatedQuotes.length > 0) {
+    hatedOrCriticizedElements.push({
+      topic: `Viewer Complaints & Friction Points`,
+      explanation: `Viewers pointed out specific areas needing improvement or clarification.`,
+      sampleQuotes: hatedQuotes
+    });
+  }
 
   return {
     suggestedTitles,
     keywords: {
-      primaryTags: [mainSubject.toLowerCase(), secondarySubject.toLowerCase(), 'tutorial', 'guide 2026', 'youtube growth'],
-      secondaryTags: [`${mainSubject.toLowerCase()} tips`, `how to ${mainSubject.toLowerCase()}`, 'creator strategy', 'viral content'],
-      longTailKeywords: [
-        `how to get started with ${mainSubject.toLowerCase()}`,
-        `step by step ${mainSubject.toLowerCase()} guide`,
-        `best practices for ${secondarySubject.toLowerCase()}`
-      ],
-      hashtags: [`#${mainSubject.replace(/\s+/g, '')}`, `#${secondarySubject.replace(/\s+/g, '')}`, '#YouTubeGrowth', '#CreatorStudio']
+      primaryTags,
+      secondaryTags,
+      longTailKeywords,
+      hashtags
     },
     otherVideoIdeas: [
       {
-        title: `The Complete ${mainSubject} Roadmap (Zero to Hero)`,
-        concept: `Detailed step-by-step masterclass walking through all core frameworks of ${mainSubject}.`,
+        title: `The Complete ${cleanTitleWords.slice(0, 2).join(' ') || 'Topic'} Roadmap`,
+        concept: `Detailed step-by-step masterclass walking through all core principles.`,
         targetAngle: `Solves the beginner learning curve and builds high watch time.`
       },
       {
-        title: `I Tested Top 5 ${mainSubject} Myths (Surprising Findings)`,
-        concept: `Myth-busting format testing common claims viewers ask about in the comments.`,
+        title: `I Tested Top 5 ${cleanTitleWords[0] || 'Topic'} Myths (Surprising Findings)`,
+        concept: `Myth-busting format testing common claims viewers ask about.`,
         targetAngle: `High engagement & debate driver in top comments.`
       },
       {
-        title: `How I Scaled My ${mainSubject} Strategy in 30 Days`,
+        title: `How I Scaled My ${cleanTitleWords[0] || 'Content'} Strategy in 30 Days`,
         concept: `Case study breakdown sharing exact metrics, timeline, and actionable tools.`,
         targetAngle: `Appeals to serious practitioners seeking proven frameworks.`
       },
       {
-        title: `Don't Do ${secondarySubject} Until You Watch This!`,
+        title: `Don't Do ${cleanTitleWords[0] || 'This'} Until You Watch This!`,
         concept: `Common mistakes and pitfalls warning video targeting new viewers.`,
         targetAngle: `High CTR urgency trigger for broad audience.`
-      },
-      {
-        title: `Answers to Top Viewer Questions on ${mainSubject}`,
-        concept: `Q&A session directly addressing the top questions raised in audience comments.`,
-        targetAngle: `Builds strong viewer loyalty and channel authority.`
       }
     ],
     commentAnalysis: {
@@ -328,32 +375,8 @@ function generateDynamicCommentAnalysis(videoDetails, comments = []) {
         negativePercent: negPct,
         neutralPercent: neuPct
       },
-      appreciatedElements: [
-        {
-          topic: `Praise for ${mainSubject} Content & Inspiration`,
-          explanation: 'Viewers expressed strong appreciation for the authenticity, value, and insights provided.',
-          sampleQuotes: lovedQuotes.length > 0 ? lovedQuotes : [
-            'Bhaiya really proud of you! Masterpiece in one frame, you are great!',
-            'Thank you so much for sharing this valuable information!'
-          ]
-        },
-        ...(secondaryLovedQuotes.length > 0 ? [{
-          topic: `Community Respect & Creator Authority`,
-          explanation: 'Audience praised creator relatability and direct communication style.',
-          sampleQuotes: secondaryLovedQuotes
-        }] : [])
-      ],
-      hatedOrCriticizedElements: [
-        {
-          topic: hatedQuotes.length > 0 ? 'Viewer Complaints & Constructive Feedback' : 'Audio & Content Structure Critiques',
-          explanation: hatedQuotes.length > 0 
-            ? 'Viewers pointed out specific areas needing improvement or clarification.'
-            : 'Constructive audience feedback regarding background music balance and pacing.',
-          sampleQuotes: hatedQuotes.length > 0 ? hatedQuotes : [
-            'Audio was a bit hard to hear in some parts, background music volume was slightly high.'
-          ]
-        }
-      ],
+      appreciatedElements,
+      hatedOrCriticizedElements,
       viewerQuestions: finalQuestions,
       creatorActionPlan
     }
