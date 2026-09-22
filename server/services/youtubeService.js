@@ -21,10 +21,20 @@ export function decodeHtmlEntities(str) {
 export function extractVideoId(input) {
   if (!input) return null;
   const trimmed = input.trim();
-  
-  const watchMatch = trimmed.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/);
-  if (watchMatch && watchMatch[1]) {
-    return watchMatch[1];
+
+  try {
+    const urlObj = new URL(trimmed.startsWith('http') ? trimmed : `https://${trimmed}`);
+    const vParam = urlObj.searchParams.get('v');
+    if (vParam && /^[a-zA-Z0-9_-]{11}$/.test(vParam)) {
+      return vParam;
+    }
+  } catch (e) {
+    // Ignore URL parse error and fallback to regex
+  }
+
+  const match = trimmed.match(/(?:v=|\/shorts\/|\/embed\/|\/v\/|\/live\/|youtu\.be\/|\/watch\/)([a-zA-Z0-9_-]{11})/i);
+  if (match && match[1]) {
+    return match[1];
   }
 
   if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) {
