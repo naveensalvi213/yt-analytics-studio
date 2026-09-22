@@ -241,58 +241,94 @@ function generateDynamicCommentAnalysis(videoDetails, comments = []) {
   // Extract hated quotes (Max 3 distinct quotes that NEVER overlap with loved quotes)
   const hatedQuotes = hatedComments.filter(c => !lovedQuotes.includes(c.text)).slice(0, 3).map(c => c.text);
 
-  // Extract keywords from real video tags, description, and title
+  // Deep Keyword & Phrase Frequency Mining from Comments, Title & Description
+  const stopWords = new Set([
+    // Standard English Stopwords
+    'the', 'is', 'at', 'which', 'on', 'a', 'an', 'and', 'or', 'but', 'if', 'then', 'else', 'when',
+    'at', 'from', 'by', 'for', 'with', 'about', 'against', 'between', 'into', 'through', 'during',
+    'before', 'after', 'above', 'below', 'to', 'of', 'up', 'down', 'in', 'out', 'off', 'over', 'under',
+    'again', 'further', 'this', 'that', 'these', 'those', 'am', 'are', 'was', 'were', 'be', 'been',
+    'being', 'have', 'has', 'had', 'having', 'do', 'does', 'did', 'doing', 'you', 'your', 'yours',
+    'yourself', 'yourselves', 'he', 'him', 'his', 'himself', 'she', 'her', 'hers', 'herself', 'it',
+    'its', 'itself', 'they', 'them', 'their', 'theirs', 'themselves', 'what', 'which', 'who', 'whom',
+    'video', 'watch', 'channel', 'youtube', 'sub', 'subscribe', 'like', 'comment', 'comments', 'official',
+    // Hinglish & Conversational Filler Terms
+    'bhaiya', 'bhai', 'bro', 'sir', 'guys', 'dude', 'raha', 'kuch', 'main', 'mene', 'aap', 'bhi', 'par',
+    'aur', 'ka', 'ki', 'ke', 'se', 'me', 'ne', 'toh', 'bna', 'kar', 'ko', 'hai', 'ho', 'bain', 'ye', 'woh',
+    'bhi', 'hum', 'tum', 'tera', 'mera', 'meri', 'mere', 'sab', 'ab', 'tak', 'kya', 'kaise', 'kab', 'kahan',
+    'wala', 'wali', 'wale', 'ghar', 'banao', 'chahiye', 'karna', 'karo', 'dada', 'please', 'really'
+  ]);
+
+  const wordFreq = {};
+  const allText = `${title} ${videoDetails.description || ''} ${comments.map(c => c.text).join(' ')}`;
+  const cleanTokens = allText.toLowerCase().replace(/[^\w\s]/g, ' ').split(/\s+/);
+  
+  cleanTokens.forEach(word => {
+    if (word.length > 3 && !stopWords.has(word) && !/^\d+$/.test(word)) {
+      wordFreq[word] = (wordFreq[word] || 0) + 1;
+    }
+  });
+
+  const sortedTopWords = Object.keys(wordFreq)
+    .sort((a, b) => wordFreq[b] - wordFreq[a])
+    .slice(0, 10);
+
+  const topKeyword1 = sortedTopWords[0] || 'mastery';
+  const topKeyword2 = sortedTopWords[1] || 'strategy';
+  const topKeyword3 = sortedTopWords[2] || 'growth';
+
   const videoTags = (videoDetails.tags || []).map(t => t.toLowerCase().trim()).filter(Boolean);
   const cleanTitleWords = title.split(/\s+/).map(w => w.replace(/[^\w]/g, '')).filter(w => w.length > 3);
   
   const primaryTags = Array.from(new Set([
-    ...cleanTitleWords.slice(0, 3).map(w => w.toLowerCase()),
+    ...sortedTopWords.slice(0, 4),
     ...videoTags.slice(0, 3),
-    'youtube 2026'
+    ...cleanTitleWords.slice(0, 3).map(w => w.toLowerCase())
   ])).slice(0, 6);
 
   const secondaryTags = Array.from(new Set([
     ...videoTags.slice(3, 8),
-    ...cleanTitleWords.map(w => `${w.toLowerCase()} guide`),
-    'viral tips'
+    ...sortedTopWords.slice(4, 8).map(w => `${w} guide`),
+    `${topKeyword1} tips`
   ])).slice(0, 6);
 
   const longTailKeywords = [
-    `how to ${cleanTitleWords.join(' ').toLowerCase()}`,
-    `best practices for ${cleanTitleWords[0] || 'this topic'}`,
-    `step by step ${cleanTitleWords.slice(0, 2).join(' ').toLowerCase()} tutorial`
+    `how to master ${topKeyword1} and ${topKeyword2}`,
+    `best practices for ${cleanTitleWords.slice(0, 2).join(' ').toLowerCase()}`,
+    `step by step ${topKeyword1} blueprint tutorial`
   ];
 
   const hashtags = Array.from(new Set([
+    `#${topKeyword1.charAt(0).toUpperCase() + topKeyword1.slice(1)}`,
+    `#${topKeyword2.charAt(0).toUpperCase() + topKeyword2.slice(1)}`,
     ...cleanTitleWords.map(w => `#${w}`),
-    '#YouTubeGrowth',
-    '#CreatorStudio'
+    '#YouTubeGrowth'
   ])).slice(0, 5);
 
-  // Dynamic High-CTR Titles
+  // Dynamic Bespoke High-CTR Titles
   const suggestedTitles = [
     {
-      title: `Why Everyone is Talking About "${title.slice(0, 50)}"`,
-      strategy: `High-curiosity hook built around ${cleanTitleWords[0] || 'main subject'}.`,
-      hookType: 'Curiosity'
-    },
-    {
-      title: `Stop Making This ${cleanTitleWords[0] || 'Content'} Mistake! (${title.slice(0, 35)})`,
-      strategy: `Contrarian fear-of-missing-out framing targeting active viewers.`,
-      hookType: 'Contrarian'
-    },
-    {
-      title: `The Ultimate ${cleanTitleWords.slice(0, 2).join(' ') || 'Strategy'} Blueprint`,
-      strategy: `High-value step-by-step authority title to boost search clicks.`,
+      title: `How to Master ${topKeyword1.toUpperCase()} & ${topKeyword2.toUpperCase()} (${title.slice(0, 35)})`,
+      strategy: `Direct benefit title targeting highest-frequency viewer interest terms (${topKeyword1}, ${topKeyword2}).`,
       hookType: 'High Value'
     },
     {
-      title: `I Tried ${title.slice(0, 40)} (Real Results Revealed)`,
-      strategy: `Personal narrative format with strong proof and outcome driver.`,
+      title: `Why Most Creators Fail at ${topKeyword1.toUpperCase()} (And How to Fix It)`,
+      strategy: `Contrarian hook driving urgency around common pitfalls in ${topKeyword1}.`,
+      hookType: 'Contrarian'
+    },
+    {
+      title: `The 12-Month ${topKeyword1.toUpperCase()} Blueprint (${title.slice(0, 35)})`,
+      strategy: `Curiosity framework emphasizing a step-by-step roadmap.`,
+      hookType: 'Curiosity'
+    },
+    {
+      title: `I Tested ${topKeyword1.toUpperCase()} for 30 Days (Real Results & Proof)`,
+      strategy: `Personal case study narrative format proven to increase click retention.`,
       hookType: 'Story & Proof'
     },
     {
-      title: `5 Secrets to Master ${cleanTitleWords[0] || 'This Topic'} in 2026`,
+      title: `5 Secrets to Master ${topKeyword1.toUpperCase()} in 2026`,
       strategy: `Listicle format with current year urgency marker.`,
       hookType: 'Urgency'
     }
@@ -304,11 +340,11 @@ function generateDynamicCommentAnalysis(videoDetails, comments = []) {
   // Dynamic action plan based strictly on real comments
   const creatorActionPlan = [
     lovedComments.length > 0 
-      ? `Double down on audience-praised topics in top comments (e.g. "${lovedComments[0]?.text?.slice(0, 40)}...")`
-      : `Encourage viewers in your next intro to leave comments to boost algorithmic engagement.`,
+      ? `Double down on audience praise for ${topKeyword1}: "${lovedComments[0]?.text?.slice(0, 45)}..."`
+      : `Encourage viewers in your next intro to leave comments on ${topKeyword1}.`,
     hatedComments.length > 0 
       ? `Address critical viewer feedback: "${hatedComments[0]?.text?.slice(0, 50)}..."`
-      : `Pin a comment asking viewers what specific topics they want covered next.`,
+      : `Pin a comment asking viewers what specific questions they have about ${topKeyword1}.`,
     finalQuestions.length > 0
       ? `Create a dedicated follow-up upload answering: "${finalQuestions[0]}"`
       : `Create a follow-up video building on "${title.slice(0, 35)}"`
@@ -318,14 +354,14 @@ function generateDynamicCommentAnalysis(videoDetails, comments = []) {
   if (lovedQuotes.length > 0) {
     appreciatedElements.push({
       topic: `Audience Praise & Positive Highlights`,
-      explanation: `Viewers expressed appreciation for authentic value and insights in the video.`,
+      explanation: `Viewers praised authentic insights around ${topKeyword1} and creator delivery.`,
       sampleQuotes: lovedQuotes
     });
   }
   if (secondaryLovedQuotes.length > 0) {
     appreciatedElements.push({
-      topic: `Community Engagement & Respect`,
-      explanation: `Audience praised creator presentation and direct communication style.`,
+      topic: `Community Respect & Creator Authority`,
+      explanation: `Audience expressed strong respect for creator perspective on ${topKeyword2}.`,
       sampleQuotes: secondaryLovedQuotes
     });
   }
@@ -334,10 +370,36 @@ function generateDynamicCommentAnalysis(videoDetails, comments = []) {
   if (hatedQuotes.length > 0) {
     hatedOrCriticizedElements.push({
       topic: `Viewer Complaints & Friction Points`,
-      explanation: `Viewers pointed out specific areas needing improvement or clarification.`,
+      explanation: `Viewers pointed out specific areas needing clarification regarding ${topKeyword1}.`,
       sampleQuotes: hatedQuotes
     });
   }
+
+  // Bespoke Follow-up Video Ideas based on mined comment topics
+  const otherVideoIdeas = [
+    {
+      title: finalQuestions.length > 0 
+        ? `Answering Top Viewer Question: "${finalQuestions[0]?.slice(0, 45)}..."`
+        : `The Complete ${topKeyword1.toUpperCase()} & ${topKeyword2.toUpperCase()} Masterclass`,
+      concept: `Direct Q&A breakdown addressing specific audience inquiries from comment section.`,
+      targetAngle: `Solves direct viewer demand and builds strong subscriber loyalty.`
+    },
+    {
+      title: `How to Build 2 High-Income Backup Skills in 12 Months (${topKeyword1.toUpperCase()} Focus)`,
+      concept: `Practical roadmap detailing daily routine, software tools, and execution steps.`,
+      targetAngle: `High watch time retention driver for ambitious viewers.`
+    },
+    {
+      title: `Top 5 Mistakes Beginners Make with ${topKeyword1.toUpperCase()} (Avoid These!)`,
+      concept: `Pitfall breakdown analyzing common errors mentioned in audience feedback.`,
+      targetAngle: `High CTR curiosity trigger targeting new audience members.`
+    },
+    {
+      title: `My Complete ${topKeyword1.toUpperCase()} Setup & Software Workflow`,
+      concept: `Behind-the-scenes tool walkthrough showing exact setup and methodology.`,
+      targetAngle: `High search volume query for viewers seeking practical implementation.`
+    }
+  ];
 
   return {
     suggestedTitles,
@@ -347,28 +409,7 @@ function generateDynamicCommentAnalysis(videoDetails, comments = []) {
       longTailKeywords,
       hashtags
     },
-    otherVideoIdeas: [
-      {
-        title: `The Complete ${cleanTitleWords.slice(0, 2).join(' ') || 'Topic'} Roadmap`,
-        concept: `Detailed step-by-step masterclass walking through all core principles.`,
-        targetAngle: `Solves the beginner learning curve and builds high watch time.`
-      },
-      {
-        title: `I Tested Top 5 ${cleanTitleWords[0] || 'Topic'} Myths (Surprising Findings)`,
-        concept: `Myth-busting format testing common claims viewers ask about.`,
-        targetAngle: `High engagement & debate driver in top comments.`
-      },
-      {
-        title: `How I Scaled My ${cleanTitleWords[0] || 'Content'} Strategy in 30 Days`,
-        concept: `Case study breakdown sharing exact metrics, timeline, and actionable tools.`,
-        targetAngle: `Appeals to serious practitioners seeking proven frameworks.`
-      },
-      {
-        title: `Don't Do ${cleanTitleWords[0] || 'This'} Until You Watch This!`,
-        concept: `Common mistakes and pitfalls warning video targeting new viewers.`,
-        targetAngle: `High CTR urgency trigger for broad audience.`
-      }
-    ],
+    otherVideoIdeas,
     commentAnalysis: {
       sentimentScore: {
         positivePercent: posPct,
