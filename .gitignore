@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+client/node_modules/
+server/node_modules/
+
+# Environment variables & secrets (CRITICAL: Keep API key secret!)
+.env
+server/.env
+client/.env
+
+# Build outputs
+dist/
+client/dist/
+build/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Scratch files and temporary tests
+scratch/
+server/scratch/
+
+# OS Files
+.DS_Store
+Thumbs.db
