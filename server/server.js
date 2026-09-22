@@ -15,6 +15,12 @@ import {
 } from './services/geminiService.js';
 import { generateNanoBananaThumbnail } from './services/thumbnailEngine.js';
 
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 dotenv.config();
 
 const app = express();
@@ -25,17 +31,6 @@ app.use(express.json());
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-// Root route
-app.get('/', (req, res) => {
-  res.send(`
-    <div style="font-family: sans-serif; text-align: center; padding: 50px; background: #0f172a; color: #f8fafc; height: 100vh;">
-      <h1 style="color: #38bdf8;">⚡ YT Video & Audience Comment Analyzer Backend</h1>
-      <p>Status: <strong style="color: #4ade80;">Running (Port ${PORT})</strong></p>
-      <p>Web App URL: <a href="http://localhost:3000" style="color: #ec4899; font-weight: bold;">http://localhost:3000</a></p>
-    </div>
-  `);
-});
-
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ 
@@ -45,6 +40,10 @@ app.get('/api/health', (req, res) => {
     geminiKeyConfigured: Boolean(process.env.GEMINI_API_KEY)
   });
 });
+
+// Serve compiled React frontend from client/dist if present
+const clientDistPath = path.join(__dirname, '../client/dist');
+app.use(express.static(clientDistPath));
 
 /**
  * POST /api/analyze-video
@@ -136,8 +135,31 @@ app.post('/api/audit', async (req, res) => {
   }
 });
 
+// Wildcard fallback: Serve index.html for non-API routes
+app.get('*', (req, res) => {
+  if (req.path.startsWith('/api')) {
+    return res.status(404).json({ error: 'API endpoint not found' });
+  }
+  res.sendFile(path.join(clientDistPath, 'index.html'));
+});
+
 app.listen(PORT, () => {
   console.log(`================================================`);
-  console.log(`🚀 YT Video & Comment Analyzer Backend Port ${PORT}`);
+  console.log(`🚀 YT Creator AI Studio Server running on Port ${PORT}`);
   console.log(`================================================`);
+
+  // NEVER-SLEEP KEEP-ALIVE HEARTBEAT (Pings self every 10 minutes to prevent Render sleep)
+  const renderUrl = process.env.RENDER_EXTERNAL_URL || process.env.PUBLIC_URL;
+  if (renderUrl) {
+    console.log(`[Keep-Alive] Initializing self-ping heartbeat for ${renderUrl}...`);
+    const TEN_MINUTES = 10 * 60 * 1000;
+    setInterval(async () => {
+      try {
+        console.log(`[Keep-Alive Heartbeat] Pinging ${renderUrl}/api/health to keep Render active...`);
+        await fetch(`${renderUrl}/api/health`);
+      } catch (e) {
+        console.warn('[Keep-Alive] Heartbeat ping failed:', e.message);
+      }
+    }, TEN_MINUTES);
+  }
 });
